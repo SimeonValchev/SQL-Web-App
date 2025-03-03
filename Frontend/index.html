@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SQL Web App</title>
+
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <link rel="stylesheet" href="static/myStyle.css">
+
+</head>
+
+
+
+<body onload = "fetchData(); clock(0, 0)">
+
+<input type="hidden" id="idInput" name = "idInput" value = "">
+
+
+<div class = "grid-container">
+
+    <div class = "header">
+        <h1>SQL Web App</h1>
+    </div>
+
+    <div class = "text-fields">
+        <table>
+            <tr>
+                <td></td>
+
+                <!-- ERROR MESSAGES -->
+                <td><label class = "error" id="fnameError">First name required</label></td>
+                <td style="padding-left: 50px;"></td>
+                <td><label class = "error" id="lnameError">Last name required</label></td>
+            </tr>
+            <tr>
+                <!-- FIRST AND LAST NAME -->
+                <td align = "right"><label for = "fnameInput" class = "text-field-labels">First name:</label></td>
+                <td><input type="text" id="fnameInput" name = "fnameInput"></td>
+
+                <td align = "right" style="padding-left: 50px;"><label for = "lnameInput" class = "text-field-labels">Last name:</label></td>
+                <td><input type="text" id="lnameInput" name = "lnameInput"></td>
+            </tr>
+            <tr>
+                <td></td>
+
+                <!-- ERROR MESSAGES -->
+                <td><label class = "error" id="salaryError">Invalid salary</label></td>
+                <td style="padding-left: 50px;"></td>
+                <td><label class = "error" id="dateError">Invalid date</label></td>
+            </tr>
+            <tr>
+
+                <!-- SALARY AND START_DATE -->
+                <td align = "right"><label for = "salaryInput" class = "text-field-labels">Salary:</label></td>
+                <td><input type="text" id="salaryInput" name = "salaryInput"></td>
+
+                <td align = "right" style="padding-left: 50px;"><label for = "dateInput" class = "text-field-labels">Start date:</label></td>
+                <td><input type="date" id="dateInput" name = "dateInput"></td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="buttons">
+        <button id="insertButton" onclick="eventHandler('POST')">
+            <table style="width: 100%; margin: 0;">
+                <tr>
+                    <td style="text-align: left; font-size: 1.5em;">➕</td>
+                    <td style="text-align: center; width: 100%;">Insert</td>
+                    <td style="text-align: left; "><span style="visibility: hidden;">➕</span></td>
+                </tr>
+            </table>
+        </button>
+        <button id="updateButton" onclick="eventHandler('PUT')" disabled>
+            <table style="width: 100%; margin: 0;">
+                <tr>
+                    <td style="text-align: left; font-size: 1.5em;">🔄️</td>
+                    <td style="text-align: center; width: 100%;">Update</td>
+                    <td style="text-align: left; "><span style="visibility: hidden;">🔄️</span></td>
+                </tr>
+            </table>
+        </button>
+        <button id="deleteButton" onclick="eventHandler('DELETE')" disabled>
+            <table style="width: 100%; margin: 0;">
+                <tr>
+                    <td style="text-align: left; font-size: 1.5em;">🗑️</td>
+                    <td style="text-align: center; width: 100%;">Delete</td>
+                    <td style="text-align: left; "><span style="visibility: hidden;">🗑️</span></td>
+                </tr>
+            </table>
+        </button>
+        <button id="clearButton" onclick="clearFields()">
+            <table style="width: 100%; margin: 0;">
+                <tr>
+                    <td style="text-align: left; font-size: 1.5em;">🧹</td>
+                    <td style="text-align: center; width: 100%;">Clear</td>
+                    <td style="text-align: left; "><span style="visibility: hidden;">🧹</span></td>
+                </tr>
+            </table>
+        </button>
+
+    </div>
+
+    <div class = "table-db-represent">
+        <table id="contents" border="1">
+            <tr>
+                <th>First Name</th>
+                <th>Last Name</th>
+                <th>Salary</th>
+                <th>Start Date</th>
+                <th style ="display: none">ID</th>
+            </tr>
+
+            <tbody id="table-data">
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class = "clock" id = "clock-block">
+    <div class="clock-inside" id = "clock-inside"></div>
+</div>
+
+
+<script>
+    var lastIdModified = 0;
+    var insertedEmployee = false;
+
+    function highlightMaxIdRow() {
+
+        let maxId = -Infinity;
+        let templist = document.getElementById("table-data").querySelectorAll("tr");
+
+        let counter = 0;
+
+        templist.forEach(row => {
+            let idCell = row.cells[row.cells.length - 1];
+            let idValue = parseInt(idCell.textContent, 10);
+
+            if (idValue > maxId) {
+                maxId = idValue;
+            }
+            counter++;
+        });
+
+
+        let tempId = "row" + maxId;
+        let oneORzero = (counter % 2 == 0 ? 'blink0' : 'blink1');
+        document.getElementById(tempId).classList.add(oneORzero);
+        document.getElementById(tempId).classList.add("blinking");
+
+        return removeBlink();
+    }
+
+    function removeBlink(){
+        setTimeout(() => {
+            const blinkRow = document.getElementsByClassName("blinking")[0];
+            if(blinkRow == null){
+                return;
+            }
+            blinkRow.classList.remove('blink0');
+            blinkRow.classList.remove('blink1');
+        }, 2500);
+    }
+
+    function eventHandler(actionType) {
+        if(actionType == 'DELETE'){
+            if (confirm("Are you sure you want to proceed?")){
+                lastIdModified = 0;
+                sendRequest(actionType);
+            }
+        }else{
+            if(dataValidation()){
+                lastIdModified = document.getElementById("idInput").value;
+                sendRequest(actionType);
+            }else{
+                return;
+            }
+        }
+        clearFields();
+    }
+
+    function sendRequest(actionType){
+
+        const employeeId = document.getElementById('idInput').value;
+        const employeeData = {
+                first_name: document.getElementById('fnameInput').value,
+                last_name: document.getElementById('lnameInput').value,
+                salary: document.getElementById('salaryInput').value,
+                start_date: document.getElementById('dateInput').value
+            };
+
+        let appendix = `/${employeeId}`;
+        insertedEmployee = false;
+
+        if(actionType == 'POST'){
+            appendix = ``;
+            insertedEmployee = true;
+        }
+
+        fetch(`http://localhost:8080/employees${appendix}`, {
+            method: actionType,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(employeeData)
+            })
+            .then(response => {
+                if(!response.ok){
+                    throw new Error("Operation to the backend failed!");
+                }
+            })
+            .then(() => {
+                fetchData();
+            })
+            .catch(error => {
+                alert("Error accessing the database!😅");
+            });
+    }
+
+    function fetchData() {
+        fetch('http://localhost:8080/employees', {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            const tableBody = document.getElementById("table-data");
+            tableBody.innerHTML = "";
+
+            var evenOdd = 0;
+            data.forEach(employee => {
+                var enableBlinking = (employee.id == lastIdModified) ? `class = 'blink${evenOdd % 2} blinking'` : ``;
+
+                const salary = parseFloat(employee.salary).toFixed(2);
+
+                const row = `<tr onclick='markRow(this)' id = 'row${employee.id}' ${enableBlinking}>
+                    <td>${employee.first_name}</td>
+                    <td>${employee.last_name}</td>
+                    <td>${salary}</td>
+                    <td>${employee.start_date}</td>
+                    <td style ='display: none'>${employee.id}</td>
+                </tr>`;
+
+                tableBody.innerHTML += row;
+                evenOdd++;
+
+                });
+            })
+            .then(() => {
+                if(insertedEmployee){
+                    highlightMaxIdRow();
+                }
+            })
+            .then(() => {
+                removeBlink();
+            })
+            .catch(error => {
+                alert("Error accessing the database!😅");
+            });
+
+
+    }
+
+    function clearRows() {
+        var allRows = document.querySelectorAll("tr");
+        allRows.forEach(function(r) {
+           r.style.backgroundColor = "";
+        });
+    }
+
+    function markRow(row) {
+        clearRows();
+
+        row.style.backgroundColor = row.style.backgroundColor === "#e9f08d" ? "" : "#e9f08d";
+
+        let cells = row.getElementsByTagName("td");
+
+        document.getElementById("fnameInput").value = cells[0].textContent;
+        document.getElementById("lnameInput").value = cells[1].textContent;
+        document.getElementById("salaryInput").value = cells[2].textContent;
+        document.getElementById("dateInput").value = cells[3].textContent;
+        document.getElementById("idInput").value = cells[4].textContent;
+
+        document.getElementById("insertButton").disabled = true;
+        document.getElementById("updateButton").disabled = false;
+        document.getElementById("deleteButton").disabled = false;
+
+    }
+
+    function clearFields() {
+        clearRows();
+
+        document.getElementById("fnameInput").value = "";
+        document.getElementById("lnameInput").value = "";
+        document.getElementById("salaryInput").value = "";
+        document.getElementById("dateInput").value = "";
+        document.getElementById("idInput").value = "";
+
+        document.getElementById("fnameError").style.visibility = "hidden";
+        document.getElementById("lnameError").style.visibility = "hidden";
+        document.getElementById("salaryError").style.visibility = "hidden";
+        document.getElementById("dateError").style.visibility = "hidden";
+
+        document.getElementById("insertButton").disabled = false;
+        document.getElementById("updateButton").disabled = true;
+        document.getElementById("deleteButton").disabled = true;
+    }
+
+    function dataValidation() {
+
+        let dataValid = 1;
+        if (document.getElementById("fnameInput").value == ""){
+            document.getElementById("fnameError").style.visibility = "visible";
+            dataValid = 0;
+        }else{
+            document.getElementById("fnameError").style.visibility = "hidden";
+        }
+
+        if (document.getElementById("lnameInput").value == ""){
+            document.getElementById("lnameError").style.visibility = "visible";
+            dataValid = 0;
+        }else{
+             document.getElementById("lnameError").style.visibility = "hidden";
+        }
+
+        var salary = document.getElementById("salaryInput").value;
+        if (salary == "" || salary == "0" || isNaN(salary)){
+            document.getElementById("salaryError").style.visibility = "visible";
+            dataValid = 0;
+        }else{
+             document.getElementById("salaryError").style.visibility = "hidden";
+        }
+
+        var dateInput = document.getElementById("dateInput").value;
+        if (dateInput == "" || isNaN(new Date(dateInput))){
+            document.getElementById("dateError").style.visibility = "visible";
+            dataValid = 0;
+        }else{
+             document.getElementById("dateError").style.visibility = "hidden";
+        }
+
+        return dataValid == 1;
+    }
+
+    function clock(sec, min){
+        const block = document.getElementById("clock-inside");
+
+        if(sec == 13){
+            sec = 0;
+            min = (min + 1) % 12;
+            block.style.transform = `rotate(${min*30}deg)`;
+        }
+        const animations = ["🕛","🕐","🕑","🕒","🕓","🕔","🕕","🕖","🕗","🕘","🕙","🕚","🕛"];
+        block.textContent = animations[sec];
+        setTimeout(() => clock(sec + 1, min), 5000);
+    }
+</script>
+</body>
+</html>
